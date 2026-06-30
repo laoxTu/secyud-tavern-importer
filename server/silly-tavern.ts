@@ -1,68 +1,17 @@
-import {v4 as uuidv4} from "uuid";
+import type {PresetLorebookModel} from "@/engines/lorebooks/models";
+import type {PresetMacroModel} from "@/engines/macros/models";
+import type {PresetScriptModel} from "@/engines/scripts/models";
+import type {PresetRegexModel} from "@/engines/regexes/models";
 
 
-// ---- SillyTavern preset JSON 类型 ----
+// ---- 共享导出类型（引擎 models 别名） ----
 
-export interface StPrompt {
-    name: string;
-    enabled?: boolean;
-    injection_position?: number;
-    injection_depth?: number;
-    injection_order?: number;
-    role: string;
-    content: string;
-    system_prompt?: boolean;
-    marker?: boolean;
-    identifier?: string;
-}
+export type LorebookEntry = PresetLorebookModel;
+export type MacroEntry = PresetMacroModel;
+export type ScriptEntry = PresetScriptModel;
+export type RegexEntry = PresetRegexModel;
 
-export interface StPreset {
-    temperature?: number;
-    top_p?: number;
-    top_k?: number;
-    frequency_penalty?: number;
-    presence_penalty?: number;
-    repetition_penalty?: number;
-    min_p?: number;
-    top_a?: number;
-    openai_max_context?: number;
-    openai_max_tokens?: number;
-    stream_openai?: boolean;
-    prompts?: StPrompt[];
-    prompt_order?: { identifier: string; enabled: boolean }[];
-    // ST 模板格式字符串
-    scenario_format?: string;
-    personality_format?: string;
-    wi_format?: string;
-    impersonation_prompt?: string;
-    new_chat_prompt?: string;
-    continue_nudge_prompt?: string;
-    group_nudge_prompt?: string;
-}
-
-// ---- Secyud Tavern 导出类型 ----
-
-export interface LorebookEntry {
-    id?: number;
-    code: string;
-    name: string;
-    matchType: string;
-    matchExpression: Record<string, any>;
-    content: string;
-    priority: number;
-    layer: number;
-    role: string;
-    disabled: boolean;
-}
-
-export interface MacroEntry {
-    id?: number;
-    code: string;
-    name: string;
-    key: string;
-    value: string;
-    disabled?: boolean;
-}
+// ---- Secyud Tavern 预设导出结构 ----
 
 export interface PresetExport {
     id: string;
@@ -92,14 +41,33 @@ export interface PresetExport {
         };
     };
     entries: {
-        lorebooks: LorebookEntry[];
-        macros: MacroEntry[];
+        lorebooks: PresetLorebookModel[];
+        macros: PresetMacroModel[];
+        scripts: PresetScriptModel[];
+        regexes: PresetRegexModel[];
     };
 }
 
-// ---- 常规工具 ----
+// ---- ST 公共类型（预设和角色卡通用） ----
 
-function sanitizeCode(name: string): string {
+export interface StRegexScript {
+    scriptName: string;
+    findRegex: string;
+    replaceString: string;
+    placement: number[];
+    disabled: boolean;
+}
+
+export interface StScript {
+    name: string;
+    content: string;
+    enabled: boolean;
+    type?: string;
+}
+
+// ---- 公共工具 ----
+
+export function sanitizeCode(name: string): string {
     return name
         .replace(/[^a-zA-Z0-9一-鿿_]/gu, '_')
         .replace(/_+/gu, '_')
@@ -109,23 +77,43 @@ function sanitizeCode(name: string): string {
 }
 
 /**
- * ST injection_position + injection_depth → Secyud layer
+ * ST 预设 Prompt Manager 的 injection_position + injection_depth → Secyud layer
  *
- * ST pos:  0=主提示前  1=主提示后  2=对话顶部  3=对话底部
- * ST depth: 0=最靠近底部（最后插入） 4=最远离底部（最先插入）
+ * ST Prompt Manager（来源: docs.sillytavern.app/usage/prompts/prompt-manager）:
+ *   injection_position: 0=RELATIVE（相对聊天末尾）, 1=ABSOLUTE（绝对固定位置）
+ *   injection_depth:    在 RELATIVE 模式下，距底部消息数（0=紧贴最新消息）
+ *   injection_order:    同深度内的排序（先按 role 分组，再按 order 排列）
  *
  * Secyud layer: 越大越后插入
  */
 export function mapLayer(pos: number | undefined, depth: number | undefined): number {
     const p = pos ?? 0;
     const d = depth ?? 4;
-    // depth 0 (底部) → offset 4; depth 4 (顶部) → offset 0
-    return p * 100 + (4 - d) * 20;
+    if (p === 0) {
+        // RELATIVE 模式：对话区内按深度偏移
+        // 基值 200（对话区），depth 0（底部）→ 偏移大，depth 4（顶部）→ 偏移小
+        return 200 + (4 - d) * 10;
+    }
+    // ABSOLUTE 模式：按深度固定定位
+    return d * 10;
+}
+
+/** 解析 ST 正则格式 /pattern/flags → 纯 pattern 字符串 */
+export function parseStRegex(findRegex: string): string {
+    const m = findRegex.match(/^\/(.+)\/([a-z]*)$/);
+    if (!m) return findRegex;
+    return m[1];
+}
+
+export function stPlacementToTarget(placement: number[]): string {
+    if (placement.includes(0) && placement.includes(1)) return "both";
+    if (placement.includes(1)) return "input";
+    return "output";
 }
 
 // ---- ST 宏 → Secyud Eta 模板转换 ----
 
-interface CollectedMacro {
+export interface CollectedMacro {
     key: string;
     value: string;
     /** 所属 ST prompt 的名称（用作宏的 name） */
@@ -144,7 +132,7 @@ interface CollectedMacro {
  * - {{// comment}} → 移除
  * - 其余函数宏 (random, roll, trim 等) → 移除
  */
-function transformContent(
+export function transformContent(
     content: string,
     collectedMacros: CollectedMacro[],
     promptEnabled: boolean | undefined,
@@ -156,8 +144,7 @@ function transformContent(
     result = result.replace(/\{\{\/\/[\s\S]*?}}/g, '');
 
     // 2. setglobalvar / setvar — 提取变量
-    //    格式: {{setglobalvar::NAME::VALUE}} 或 {{setvar::NAME::VALUE}}
-    const macroDisabled = promptEnabled === false;  // undefined → false（默认启用）
+    const macroDisabled = promptEnabled === false;
     result = result.replace(
         /\{\{(?:setglobalvar|setvar)::([^:]+)::([\s\S]*?)}}/g,
         (_full: string, name: string, value: string) => {
@@ -181,87 +168,26 @@ function transformContent(
     result = result.replace(/\{\{charIfNotGroup}}/g, '<%~ it.char %>');
     result = result.replace(/\{\{lastUserMessage}}/gi, '<%~ it.lastUserMessage %>');
 
-    // 5. 残余的函数宏 (random, roll, trim, 等) — 移除
+    // 5. 残余的函数宏 — 移除
     result = result.replace(/\{\{[^}]+}}/g, '');
 
     // 6. 清理多余空行
     result = result.replace(/\n{3,}/g, '\n\n');
-    result = result.trim();
-
-    return result;
+    return result.trim();
 }
 
-// ---- 主要转换流程 ----
-
-export function stPromptToLorebook(p: StPrompt, index: number): LorebookEntry | null {
-    // 跳过 ST 标记型占位 Prompt（Secyud 有自己的注入体系）
-    if (p.system_prompt && p.marker) return null;
-
-    // 跳过空内容
-    if (!p.content || p.content.trim().length === 0) return null;
-
-    const code = sanitizeCode(p.name) || `st_prompt_${index}`;
-
-    return {
-        code,
-        name: p.name,
-        matchType: 'always',
-        matchExpression: {lastMessage: false},
-        content: p.content,  // 暂存原始内容，后续统一做宏转换
-        priority: index,
-        layer: mapLayer(p.injection_position, p.injection_depth),
-        role: p.role || 'system',
-        disabled: p.enabled === false,
-    };
-}
-
-export function convertStPreset(st: StPreset, originalFilename: string): PresetExport {
-    const baseName = originalFilename.replace(/\.json$/i, '');
-
-    // 转换 prompts → lorebooks
-    const prompts = st.prompts ?? [];
-    const lorebooks: LorebookEntry[] = [];
-    const usedCodes = new Set<string>();
-
-    // 收集所有 ST 变量 → 宏（允许同名、不同取值，靠 disabled 切换）
-    const collectedMacros: CollectedMacro[] = [];
-
-    for (let i = 0; i < prompts.length; i++) {
-        const p = prompts[i];
-        const entry = stPromptToLorebook(p, i);
-        if (!entry) continue;
-
-        // 去重 code
-        let code = entry.code;
-        let suffix = 1;
-        while (usedCodes.has(code)) {
-            code = `${entry.code}_${suffix++}`;
-        }
-        usedCodes.add(code);
-        entry.code = code;
-
-        // 转换 ST 宏 → Eta 模板（传入 prompt 的 enabled 状态和名称）
-        entry.content = transformContent(entry.content, collectedMacros, p.enabled, p.name);
-
-        // 转换后内容为空则丢弃（纯变量初始化/注释型 prompt）
-        if (!entry.content) continue;
-
-        // entryId 使用递增整数
-        entry.id = lorebooks.length + 1;
-        lorebooks.push(entry);
-    }
-
-    // 变量 → 宏条目（用 promptName 作为可读名称，同名 code 加 _2, _3 后缀）
-    const macros: MacroEntry[] = [];
-    const macroCodeCount = new Map<string, number>();
-    let macroId = 1;
-    for (const m of collectedMacros) {
+/** 将收集到的宏列表转为 PresetMacroModel[]（处理同名 code 去重） */
+export function buildMacroEntries(collected: CollectedMacro[]): PresetMacroModel[] {
+    const macros: PresetMacroModel[] = [];
+    const codeCount = new Map<string, number>();
+    let id = 1;
+    for (const m of collected) {
         const baseCode = sanitizeCode(m.promptName) || sanitizeCode(m.key);
-        const count = (macroCodeCount.get(baseCode) ?? 0) + 1;
-        macroCodeCount.set(baseCode, count);
+        const count = (codeCount.get(baseCode) ?? 0) + 1;
+        codeCount.set(baseCode, count);
 
         macros.push({
-            id: macroId++,
+            id: id++,
             code: count === 1 ? baseCode : `${baseCode}_${count}`,
             name: m.promptName,
             key: m.key,
@@ -269,37 +195,45 @@ export function convertStPreset(st: StPreset, originalFilename: string): PresetE
             disabled: m.disabled,
         });
     }
+    return macros;
+}
 
-    return {
-        id: uuidv4(),
-        name: baseName,
-        version: '1.0.0',
-        code: baseName.replace(/[^a-zA-Z0-9一-鿿_]/gu, '_').replace(/_+/gu, '_').replace(/^_|_$/gu, '').toLowerCase().slice(0, 64) || 'imported_preset',
-        tags: ['imported', 'silly-tavern'],
-        requires: [],
-        content: {
-            author: '',
-            description: `从 SillyTavern 导入：${baseName}`,
-            coverId: null,
-            stLlmParams: {
-                temperature: st.temperature,
-                top_p: st.top_p,
-                top_k: st.top_k,
-                frequency_penalty: st.frequency_penalty,
-                presence_penalty: st.presence_penalty,
-                repetition_penalty: st.repetition_penalty,
-                min_p: st.min_p,
-                top_a: st.top_a,
-            },
-            stFormatStrings: {
-                scenario_format: st.scenario_format,
-                personality_format: st.personality_format,
-                wi_format: st.wi_format,
-            },
-        },
-        entries: {
-            lorebooks,
-            macros,
-        },
-    };
+/** 从 ST extensions 中提取正则条目 */
+export function extractStRegexes(rawRegexes: StRegexScript[] | undefined): PresetRegexModel[] {
+    const regexes: PresetRegexModel[] = [];
+    if (!rawRegexes) return regexes;
+    for (let i = 0; i < rawRegexes.length; i++) {
+        const r = rawRegexes[i];
+        const pattern = parseStRegex(r.findRegex);
+        if (!pattern) continue;
+        regexes.push({
+            id: i + 1,
+            code: sanitizeCode(r.scriptName) || `regex_${i + 1}`,
+            name: r.scriptName,
+            pattern,
+            replacement: r.replaceString,
+            target: stPlacementToTarget(r.placement),
+            disabled: r.disabled,
+        });
+    }
+    return regexes;
+}
+
+/** 从 ST extensions 中提取脚本条目 */
+export function extractStScripts(rawScripts: StScript[] | undefined): PresetScriptModel[] {
+    const scripts: PresetScriptModel[] = [];
+    if (!rawScripts) return scripts;
+    for (let i = 0; i < rawScripts.length; i++) {
+        const s = rawScripts[i];
+        scripts.push({
+            id: i + 1,
+            code: sanitizeCode(s.name) || `script_${i + 1}`,
+            name: s.name,
+            content: s.content,
+            priority: 100 + i,
+            type: s.type || "js",
+            disabled: !s.enabled,
+        });
+    }
+    return scripts;
 }
