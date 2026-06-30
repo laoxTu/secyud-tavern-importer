@@ -11,5 +11,11 @@
     "importSuccess": "Import succeeded",
     "importFailed": "Import failed",
     "file": "Choose file"
+  },
+  "plugin": {
+    "no_file": "No file selected",
+    "invalid_json": "Invalid JSON file",
+    "invalid_st_preset": "Not a valid SillyTavern preset",
+    "invalid_st_char": "Not a valid SillyTavern character card"
   }
 }
