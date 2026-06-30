@@ -1,5 +1,14 @@
 {
   "default": {
     "importer": "Importer"
+  },
+  "importer": {
+    "title": "Import Data",
+    "description": "Import data from other taverns/frontends",
+    "sillyTavernPreset": "SillyTavern Preset",
+    "sillyTavernCharacter": "SillyTavern Character",
+    "importing": "Importing…",
+    "importSuccess": "Import succeeded",
+    "importFailed": "Import failed"
   }
 }

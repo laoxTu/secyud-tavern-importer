@@ -9,6 +9,11 @@ const route = {
                 async POST(request: NextRequest, records: Record<string, any>): Promise<NextResponse> {
                     return NextResponse.json(null);
                 }
+            },
+            "character": {
+                async POST(request: NextRequest, records: Record<string, any>): Promise<NextResponse> {
+                    return NextResponse.json(null);
+                }
             }
         }
     }
