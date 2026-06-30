@@ -9,6 +9,7 @@
     "sillyTavernCharacter": "SillyTavern 角色卡",
     "importing": "导入中…",
     "importSuccess": "导入成功",
-    "importFailed": "导入失败"
+    "importFailed": "导入失败",
+    "file": "选择文件"
   }
 }

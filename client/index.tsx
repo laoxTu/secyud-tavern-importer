@@ -26,7 +26,7 @@ import {Input} from "@/components/ui/input";
 interface ImportAction {
     key: string;
     path: string;
-    accept: string;       // 接受的文件类型
+    accept: string;
 }
 
 const importActions: ImportAction[] = [
@@ -34,12 +34,12 @@ const importActions: ImportAction[] = [
     {key: 'sillyTavernCharacter', path: '/silly-tavern/import/character', accept: '.json,.png'},
 ];
 
-function Content() {
+function ImportDialog({action}: { action: ImportAction }) {
     const t = useTranslations();
     const {handleError, handleSuccess} = useErrorHandler();
     const [open, setOpen] = useState(false);
 
-    const createImportHandler = (action: ImportAction) => async (formData: FormData) => {
+    const handleImport = async (formData: FormData) => {
         try {
             await handleResponse(
                 await fetch(`/plugins/api${action.path}`, {
@@ -47,6 +47,8 @@ function Content() {
                     body: formData,
                 })
             );
+
+            setOpen(false);
             handleSuccess(t('importer.importSuccess'));
         } catch (err) {
             handleError(err);
@@ -54,61 +56,63 @@ function Content() {
     };
 
     return (
-        <div className="flex flex-col h-full items-center justify-center min-h-[60vh] gap-8 p-8">
-            {/* 说明文字 */}
-            <p className="text-sm text-muted-foreground max-w-sm text-center leading-relaxed">
-                {t('importer.description')}
-            </p>
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button onClick={() => setOpen(true)}>
+                    {t(`importer.${action.key}`)}
+                </Button>
+            </DialogTrigger>
 
-            {/* 导入 Dialog */}
-            <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                    <Button onClick={() => setOpen(true)}>
-                        {t('default.import')}
-                    </Button>
-                </DialogTrigger>
-
-                <DialogContent>
+            <DialogContent>
+                <form action={handleImport} className="form-reset">
                     <DialogHeader>
                         <DialogTitle>
-                            {t('importer.title')}
+                            {t(`importer.${action.key}`)}
                         </DialogTitle>
                         <DialogDescription>
                             {t('importer.description')}
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex flex-col gap-4">
-                        {importActions.map(action => (
-                            <form key={action.key}
-                                  action={createImportHandler(action)}
-                                  className="form-reset flex items-end gap-3">
-                                <Field>
-                                    <FieldLabel htmlFor={`import-${action.key}`}>
-                                        {t(`importer.${action.key}`)}
-                                    </FieldLabel>
-                                    <Input
-                                        id={`import-${action.key}`}
-                                        name="file"
-                                        type="file"
-                                        accept={action.accept}
-                                        required
-                                    />
-                                </Field>
-                                <Button type="submit" size="sm">
-                                    {t('default.import')}
-                                </Button>
-                            </form>
-                        ))}
-                    </div>
+                    <Field>
+                        <FieldLabel htmlFor={`import-${action.key}`}>
+                            {t('importer.file')}
+                        </FieldLabel>
+                        <Input
+                            id={`import-${action.key}`}
+                            name="file"
+                            type="file"
+                            accept={action.accept}
+                            required
+                        />
+                    </Field>
 
                     <DialogFooter>
                         <DialogClose asChild>
                             <Button variant="outline">{t('default.cancel')}</Button>
                         </DialogClose>
+                        <Button type="submit">{t('default.import')}</Button>
                     </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function Content() {
+    const t = useTranslations();
+
+    return (
+        <div className="flex flex-col h-full items-center justify-center min-h-[60vh] gap-8 p-8">
+            <p className="text-sm text-muted-foreground max-w-sm text-center leading-relaxed">
+                {t('importer.description')}
+            </p>
+
+            <div className="flex flex-col items-center gap-3">
+                {importActions.map(action => (
+                    <ImportDialog key={action.key} action={action}/>
+                ))}
+            </div>
         </div>
     );
 }

@@ -9,6 +9,7 @@
     "sillyTavernCharacter": "SillyTavern Character",
     "importing": "Importing…",
     "importSuccess": "Import succeeded",
-    "importFailed": "Import failed"
+    "importFailed": "Import failed",
+    "file": "Choose file"
   }
 }
