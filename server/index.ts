@@ -24,8 +24,9 @@ async function importPreset(model: PresetExport): Promise<NextResponse> {
 }
 
 
-function readFileJson(file: File): Promise<any> {
-    return file.text().then(t => JSON.parse(t));
+async function readFileJson(file: File): Promise<any> {
+    const t = await file.text();
+    return JSON.parse(t);
 }
 
 const PNG_MIME = 'image/png';
