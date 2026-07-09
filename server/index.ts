@@ -5,7 +5,7 @@ import {type PresetExport} from "./silly-tavern";
 import {convertStPreset, type StPreset} from "./silly-tavern-preset";
 import {convertStCharCard} from "./silly-tavern-char";
 import {parseStPng} from "./png-reader";
-import {presetRepository} from "@/presets/server/repository";
+import {presetRepository} from "@/modules/presets/server/repository";
 import {imageRepository} from "@/business/server/image-repository";
 import {eq} from "drizzle-orm";
 
