@@ -30,7 +30,7 @@ interface ImportAction {
 }
 
 const importActions: ImportAction[] = [
-    {key: 'sillyTavernPreset',    path: '/silly-tavern/import/preset',    accept: '.json'},
+    {key: 'sillyTavernPreset', path: '/silly-tavern/import/preset', accept: '.json'},
     {key: 'sillyTavernCharacter', path: '/silly-tavern/import/character', accept: '.json,.png'},
 ];
 
@@ -57,12 +57,10 @@ function ImportDialog({action}: { action: ImportAction }) {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button onClick={() => setOpen(true)}>
-                    {t(`importer.${action.key}`)}
-                </Button>
+            <DialogTrigger onClick={() => setOpen(true)}
+                           render={<Button/>}>
+                {t(`importer.${action.key}`)}
             </DialogTrigger>
-
             <DialogContent>
                 <form action={handleImport} className="form-reset">
                     <DialogHeader>
@@ -88,8 +86,8 @@ function ImportDialog({action}: { action: ImportAction }) {
                     </Field>
 
                     <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">{t('default.cancel')}</Button>
+                        <DialogClose render={<Button variant="outline"/>}>
+                            {t('default.cancel')}
                         </DialogClose>
                         <Button type="submit">{t('default.import')}</Button>
                     </DialogFooter>
