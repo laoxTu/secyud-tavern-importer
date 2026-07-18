@@ -86,10 +86,12 @@ function ImportDialog({action}: { action: ImportAction }) {
                     </Field>
 
                     <DialogFooter>
+                        <Button type="submit">
+                            {t('default.import')}
+                        </Button>
                         <DialogClose render={<Button variant="outline"/>}>
                             {t('default.cancel')}
                         </DialogClose>
-                        <Button type="submit">{t('default.import')}</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
